@@ -65,7 +65,7 @@ Run only the services you need. Do not run this project and the monolith at the 
 | order-service | 8088 | orders |
 | checkout-service | 8089 | checkout |
 
-`notification-service` is ported; the other services are added as they are ported from the monolith.
+`notification-service` and `inventory-service` are ported; the other services are added as they are ported from the monolith.
 
 ## Configuration
 
@@ -96,3 +96,9 @@ Commands (from the repo root):
 Flyway per service: `services/<name>-service/src/main/resources/db/migration` (`V<n>__description.sql`),
 applied when the service starts. Never edit a migration that has already run - add `V<n+1>`.
 Hibernate only validates (`ddl-auto=validate`).
+
+Sample data: `services/<name>-service/seed/seed.sql` (safe to rerun) and `cleanup.sql` (deletes all data of the
+service). Run from the repo root, after the service has started once (Flyway creates the tables):
+```sh
+docker compose -f deploy/compose.yaml exec -T postgres psql -U <name>_svc -d <name> -v ON_ERROR_STOP=1 < services/<name>-service/seed/seed.sql
+```

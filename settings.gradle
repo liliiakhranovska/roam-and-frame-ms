@@ -5,3 +5,4 @@ pluginManagement {
 rootProject.name = 'roam-and-frame-ms'
 
 include 'services:notification-service'
+include 'services:inventory-service'

@@ -1,0 +1,1 @@
+TRUNCATE TABLE reservations, stock_items;
