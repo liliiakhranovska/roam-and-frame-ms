@@ -1,0 +1,7 @@
+pluginManagement {
+    includeBuild('build-logic')
+}
+
+rootProject.name = 'roam-and-frame-ms'
+
+include 'services:notification-service'

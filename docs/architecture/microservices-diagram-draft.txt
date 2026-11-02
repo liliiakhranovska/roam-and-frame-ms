@@ -1,0 +1,201 @@
+ROAM & FRAME - DIAGRAM DRAFT: CURRENT STATE vs MICROSERVICES
+================================================================
+Layout: two columns. Left = CURRENT (modular monolith). Right = TARGET (microservices).
+Arrows: "->" synchronous call (REST). No message broker, no events (for now).
+
+
+----------------------------------------------------------------
+COLUMN 1 - CURRENT STATE: MODULAR MONOLITH
+----------------------------------------------------------------
+
+[Client / browser / Swagger]
+        |  HTTPS + JWT
+        v
++-----------------------------------------------------------+
+| ONE Spring Boot application (one process, one deployment) |
+|                                                           |
+|  web (ApiController, DTOs)  +  security (JWT, roles)      |
+|        |                                                  |
+|        v                                                  |
+|  customer   catalog   inventory   cart                    |
+|  order      payment   shipping    notification            |
+|        ^                                                  |
+|  checkout (orchestrates the others via Java interfaces)   |
+|                                                           |
+|  Calls between modules = plain Java method calls          |
+|  (CustomerService, CartService, ... interfaces)           |
+|  Checkout = ONE @Transactional database transaction       |
++-----------------------------------------------------------+
+        |                                  |
+        v JDBC                             v SMTP
++---------------------------+      +------------------+
+| ONE PostgreSQL database   |      | Mailpit (dev)    |
+| schemas: customer,        |      +------------------+
+| catalog, inventory, cart, |
+| orders, payment, shipping |
++---------------------------+
+
+Facts to note on this side:
+ - 1 deployable, 1 database, 1 transaction for checkout
+ - Module boundaries are enforced by package-private classes and interfaces
+ - Scaling = run more copies of the whole app
+ - A bug/crash in any module can take down everything
+
+
+----------------------------------------------------------------
+COLUMN 2 - TARGET STATE: MICROSERVICES
+----------------------------------------------------------------
+
+[Client / browser]
+        |  HTTPS + JWT
+        v
++------------------+
+|   API GATEWAY    |  routing, JWT validation, rate limiting
++------------------+
+        |
+  (gateway routes to every service below)
+
+ ALL 10 SERVICES, each with its own database:
+
+ #  Service        Responsibility                      Own database
+ -- -------------- ----------------------------------- ---------------------------
+ 1  Auth           login, register credentials,        [DB auth]  credentials, role
+                   issue JWT, expose JWKS public key
+ 2  Customer       profile: name, address, phone       [DB customer]  profile
+ 3  Catalog        categories, products                [DB catalog]
+ 4  Inventory      stock, reserve / release            [DB inventory]  stock_items
+ 5  Cart           cart and cart items                 [DB cart]
+ 6  Order          orders, order items, status         [DB orders]  PLACED / SHIPPED
+ 7  Payment        charge, payment records             [DB payment]
+ 8  Shipping       shipments, tracking, ship status    [DB shipping]
+ 9  Checkout       orchestrator for placing an order   [DB checkout]  saga state only:
+                   (no business data)                  checkout_id, customer_id,
+                                                       step, status, timestamps
+ 10 Notification   sends emails (order confirmation;    NO database now
+                   cart reminders later -> then DB)
+
+ Infrastructure (not business services):
+   API Gateway, (later) config / discovery, logs, tracing
+
+ Auth <-> Customer: share the same user id (UUID); neither reads the other's DB.
+ Auth signs JWT with PRIVATE key; every other service + gateway verifies with
+ PUBLIC key (JWKS endpoint exposed by Auth). Nobody calls Auth per request.
+
+ CHECKOUT calls (sync REST), in order:
+   Checkout -> Cart       (read cart)
+   Checkout -> Customer   (shipping address)
+   Checkout -> Inventory  (reserve stock)        undo: release
+   Checkout -> Order      (create order)         undo: cancel
+   Checkout -> Payment    (charge)               undo: refund
+   Checkout -> Shipping   (create shipment)
+   Checkout -> Notification (send order confirmation email, sync REST)
+                          -> SMTP / email provider
+   Notification failing must NOT fail the order: Checkout catches the error,
+   logs it and still returns success (order is already paid and shipped).
+
+ Notification needs the customer's email: Checkout sends it in the request body
+ (email taken from a JWT "email" claim, or from a call to Auth - open decision 4b).
+
+ Admin "ship order": Admin -> Gateway -> Order service -> Shipping service
+                     (Order asks Shipping to mark SHIPPED, then marks itself SHIPPED)
+
+Facts to note on this side:
+ - 10 business services + gateway; 9 of them with their OWN database
+   (only Notification has none for now); no shared tables
+ - Calls between services = network (REST), not method calls
+ - No single transaction across services -> SAGA (steps + compensations)
+ - Each service scales, deploys and fails independently
+ - Extra infrastructure: gateway, service discovery/config,
+   central logs, tracing, one CI/CD pipeline per service
+
+
+----------------------------------------------------------------
+MAPPING TABLE (module -> service, for arrows between columns)
+----------------------------------------------------------------
+ security + auth part of customer (email, password_hash, role, token issuing)
+                      ->  Auth service (own DB: credentials + role)
+ customer (profile: name, address, phone)
+                      ->  Customer service (own DB: profile only)
+ catalog              ->  Catalog service
+ inventory            ->  Inventory service
+ cart                 ->  Cart service
+ checkout             ->  Checkout service (orchestrator + own DB with saga state)
+ order                ->  Order service
+ payment              ->  Payment service
+ shipping             ->  Shipping service
+ notification         ->  Notification service (called by Checkout over REST)
+ web                  ->  API Gateway (+ each service has its own controllers)
+ 1 Postgres schemas   ->  1 database per service
+ Java interface call  ->  REST client call
+
+
+----------------------------------------------------------------
+WHAT CHANGES FOR CHECKOUT (the hardest part - good for a zoomed-in box)
+----------------------------------------------------------------
+ TODAY (one transaction):
+   load cart -> reserve stock -> create order -> pay -> create shipment
+   any failure => database ROLLBACK, everything undone automatically
+
+ MICROSERVICES (saga):
+   1. Cart service:       get cart
+   2. Inventory service:  reserve stock           (undo: release stock)
+   3. Order service:      create order PENDING    (undo: cancel order)
+   4. Payment service:    charge                  (undo: refund)
+   5. Shipping service:   create shipment
+   6. Order service:      mark PLACED
+   7. Notification service: send confirmation email (sync call; a failure
+      here is logged and ignored - no undo of the order)
+   failure at step N (1-6) => Checkout calls the undo actions of steps N-1 ... 1
+   (compensation).
+
+   RECOVERY (why Checkout has a DB):
+   - Before each step Checkout writes the row: step = N, status = IN_PROGRESS;
+     after the step: status = DONE (or FAILED).
+   - If a service is down or Checkout itself crashes, the row stays unfinished.
+   - A scheduled recovery job in Checkout (no broker needed) finds rows that
+     are stuck too long and then either retries the step or runs the undo
+     steps of the completed ones, then sets status = COMPLETED / COMPENSATED.
+   - Every service call needs an idempotency key (checkout_id) so a retry
+     never charges / reserves / ships twice.
+
+
+----------------------------------------------------------------
+REGISTRATION (new saga caused by splitting Auth and Customer)
+----------------------------------------------------------------
+ TODAY: one INSERT into customer.customers (email, hash, name, ... role)
+
+ MICROSERVICES:
+   1. Client -> Auth service: register (email, password)
+   2. Auth: create credentials (id = new UUID, role = CUSTOMER)   (undo: delete)
+   3. Auth -> Customer service: create profile (id, email, name, address...)
+   4. Customer: create profile row with the SAME id
+   failure at step 4 => Auth deletes the credentials (compensation)
+   or the profile is completed later by the user (profile "incomplete" state)
+
+ LOGIN: Client -> Auth: email + password -> JWT (sub = user id, roles).
+        Customer service is NOT involved.
+ PROFILE: Client -> Gateway -> Customer service (JWT sub = id) -> profile.
+
+----------------------------------------------------------------
+OPEN DECISIONS (to write next to the diagram)
+----------------------------------------------------------------
+ 1. DECIDED: orchestration (Checkout calls everyone) with its own DB for saga
+    state and a recovery job
+ 2. DECIDED: no message broker for now; all calls are sync REST
+    (revisit later for Notification / cart reminders)
+ 3. Gateway: Spring Cloud Gateway
+ 4. JWT: Auth service signs; others validate with public key
+    (today HS256 shared secret -> move to RS256/JWKS)
+ 4a. Registration saga (Auth + Customer): who is the orchestrator?
+     (see section below)
+ 4b. Email lives in Auth (login id). Customer needs email for display and
+     Notification needs it for sending -> options without a broker:
+     (a) "email" claim inside the JWT (Checkout already has the token), or
+     (b) Checkout calls Auth to look it up, or
+     (c) Customer keeps a copy, filled when Auth calls it at registration
+         (see REGISTRATION step 3; email changes must be pushed too)
+ 5. Migration order (strangler): Notification first, then Catalog,
+    Customer/Auth, ... Checkout last
+ 6. Where data from other services is needed (e.g. admin order list shows
+    customer email): API call to Auth/Customer vs local copy
+ 7. Do we really need ALL of them separate? (see intro: not every module must be split)
