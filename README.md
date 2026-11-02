@@ -28,11 +28,11 @@ docs/          decisions, architecture
 ```
 
 New service: add the folder under `services/`, apply the plugin in its `build.gradle`, add
-`include 'services:<name>-service'` to `settings.gradle`.
+`include 'services:<name>-service'` to `build.gradle`.
 
 ## IntelliJ
 
-Open the `settings.gradle` file as a project (each service becomes a module). Run configuration per service:
+Open the `build.gradle` file as a project (each service becomes a module). Run configuration per service:
 
 - **Working directory: `$PROJECT_DIR$`**
 - **VM options: `-Duser.timezone=UTC -Xmx256m`**
@@ -65,7 +65,7 @@ Run only the services you need. Do not run this project and the monolith at the 
 | order-service | 8088 | orders |
 | checkout-service | 8089 | checkout |
 
-`notification-service` and `inventory-service` are ported; the other services are added as they are ported from the monolith.
+`notification-service`, `inventory-service` and `payment-service` are ported; the other services are added as they are ported from the monolith.
 
 ## Configuration
 
