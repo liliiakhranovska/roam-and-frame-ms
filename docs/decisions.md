@@ -21,6 +21,8 @@ Where this file and `architecture/microservices-diagram-draft.txt` differ, this 
 | Inventory contract | Internal only (no public API; customers see stock through Catalog). `GET /internal/inventory/quantities?skus=` (0 for unknown SKU); `POST /internal/inventory/reservations` (`orderId` + items; all or nothing; 204, or 409 when stock is short; a repeat with the same `orderId` is a no-op); `DELETE /internal/inventory/reservations/{orderId}` (gives the reserved stock back; a repeat is a no-op). Reservations are stored per `orderId` and SKU; reserving again after a release is a 409 |
 | Payment contract | Internal only. `POST /internal/payments/authorizations` (`orderId`, `customerId`, `amount`; returns `orderId`, `status`, `reference`; a repeat with the same `orderId` returns the same payment; 402 if declined; 409 if already voided); `DELETE /internal/payments/authorizations/{orderId}` (voids at the provider and marks the payment `VOIDED`; 204, a repeat or an unknown `orderId` is a no-op). Payment status: `AUTHORIZED`, `VOIDED` |
 | Catalog contract | Public (through the gateway): `GET /api/v1/products?category=&brand=&inStock=` and `GET /api/v1/products/{sku}` (404 for an unknown SKU); every product carries its `quantity`. Internal: `GET /internal/catalog/products?skus=` (products with `quantity`; unknown SKUs are left out), for Cart. Catalog reads stock from Inventory (`INVENTORY_URL`, timeout `INVENTORY_TIMEOUT`, default 2s). If Inventory is unavailable Catalog answers 503 rather than returning products without stock (revisit with the circuit breaker) |
+| Customer contract | Internal. `POST /internal/customers/authentication` (`email`, `password`; returns `customerId`, `email`, `role`, never the hash; 401 for an unknown email or a wrong password, with the same message), called by the gateway on login, which then signs the token. `GET /internal/customers/{id}` (profile with address; 404 if unknown), called by Checkout in saga step 1. Passwords are checked with BCrypt inside Customer. Public profile endpoints (`/api/v1/customer/profile`, GET and PUT) come with the gateway and token verification |
+| Seed customer ids | The customers in `services/customer-service/seed/seed.sql` have fixed ids `c0000000-0000-0000-0000-00000000000N` (N = 1..6, the last is the admin), so the seeds of other services can refer to them. All passwords are `password` |
 | Idempotency | `orderId` (generated first, as in the monolith) is the `checkout_id` and the idempotency key of every saga call |
 | Concurrency | One in-progress checkout per customer (unique rule on the saga table); replaces the monolith's cart row lock (`FOR UPDATE`) |
 | Configuration | Environment variables with local defaults: `${VARIABLE:local-default}`. Secrets never have defaults |
@@ -49,6 +51,7 @@ Same steps as the monolith's `checkout()`, but every step that changes data need
 
 ## Open
 
-- Where the customer's credentials are stored in detail, and the token contents and lifetime (monolith: 60 minutes)
+- Token contents and lifetime (monolith: subject, email and roles, 60 minutes), and how the key pair is created and distributed (credentials are settled: Customer service)
+- Data from other services in the admin order list (monolith: customer emails via `findEmails`, not ported)
 - Whether all modules need to be separate services (e.g. Order + Shipping)
 - How the client learns the checkout result (response after completion, or polling)

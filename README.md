@@ -65,7 +65,7 @@ Run only the services you need. Do not run this project and the monolith at the 
 | order-service | 8088 | orders |
 | checkout-service | 8089 | checkout |
 
-`notification-service`, `inventory-service`, `payment-service` and `catalog-service` are ported; the other services are added as they are ported from the monolith.
+`notification-service`, `inventory-service`, `payment-service`, `catalog-service` and `customer-service` are ported; the other services are added as they are ported from the monolith.
 
 ## Configuration
 
