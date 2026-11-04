@@ -28,7 +28,7 @@ docs/          decisions, architecture
 ```
 
 New service: add the folder under `services/`, apply the plugin in its `build.gradle`, add
-`include 'services:<name>-service'` to `build.gradle`.
+`include 'services:<name>-service'` to `settings.gradle`.
 
 ## IntelliJ
 
@@ -65,7 +65,7 @@ Run only the services you need. Do not run this project and the monolith at the 
 | order-service | 8088 | orders |
 | checkout-service | 8089 | checkout |
 
-`notification-service`, `inventory-service`, `payment-service`, `catalog-service` and `customer-service` are ported; the other services are added as they are ported from the monolith.
+`api-gateway`, `notification-service`, `inventory-service`, `payment-service`, `catalog-service` and `customer-service` are ported; the other services are added as they are ported from the monolith.
 
 ## Configuration
 
@@ -73,6 +73,26 @@ Anything that can differ between environments is an environment variable with a 
 `${VARIABLE:local-default}`, e.g. `server.port=${SERVER_PORT:8081}`. Locally nothing needs to be set.
 Secrets (`JWT_PRIVATE_KEY` in the gateway, `JWT_PUBLIC_KEY` in services that verify tokens) have no default
 and are never committed.
+
+### Token keys (one-time, local)
+
+The gateway signs tokens with RS256. Generate the key pair once, from the repo root (`.local/` is git-ignored):
+```sh
+mkdir -p .local/keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out .local/keys/private.pem
+openssl pkcs8 -topk8 -nocrypt -in .local/keys/private.pem -outform DER | base64 | tr -d '\n' > .local/keys/private.b64
+openssl rsa -in .local/keys/private.pem -pubout -outform DER | base64 | tr -d '\n' > .local/keys/public.b64
+```
+In the gateway's IntelliJ run configuration set the environment variables
+`JWT_PRIVATE_KEY=<contents of private.b64>;JWT_PUBLIC_KEY=<contents of public.b64>` (each on one line). Services
+that verify tokens get only `JWT_PUBLIC_KEY`. The gateway does not start without them.
+
+### Gateway
+
+Login: `POST localhost:8080/api/v1/auth/token` with `{"email": ..., "password": ...}` (sample customers: see
+`services/customer-service/seed/seed.sql`, password `password`). Send the returned `accessToken` as
+`Authorization: Bearer <token>`. A route per service is added in `api-gateway/src/main/resources/application.properties`
+when the service is ported; `/internal/**` is never reachable through the gateway.
 
 ## Local database
 
