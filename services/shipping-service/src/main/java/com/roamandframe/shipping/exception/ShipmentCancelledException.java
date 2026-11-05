@@ -1,4 +1,7 @@
 package com.roamandframe.shipping.exception;
 
-public class ShipmentCancelledException {
+import java.util.UUID;
+
+public class ShipmentCancelledException extends RuntimeException {
+    public ShipmentCancelledException(UUID orderId) { super("Shipment for order " + orderId + " was cancelled"); }
 }

@@ -1,4 +1,6 @@
 package com.roamandframe.shipping.model;
 
-public class Shipment {
+import java.util.UUID;
+
+public record Shipment(UUID id, UUID orderId, UUID customerId, ShipmentStatus status, String trackingNumber) {
 }

@@ -1,4 +1,7 @@
 package com.roamandframe.shipping.exception;
 
-public class ShipmentNotFoundException {
+import java.util.UUID;
+
+public class ShipmentNotFoundException extends RuntimeException {
+    public ShipmentNotFoundException(UUID orderId) { super("Shipment not found for order " + orderId); }
 }

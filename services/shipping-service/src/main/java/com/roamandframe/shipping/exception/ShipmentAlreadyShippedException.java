@@ -1,4 +1,7 @@
 package com.roamandframe.shipping.exception;
 
-public class ShipmentAlreadyShippedException {
+import java.util.UUID;
+
+public class ShipmentAlreadyShippedException extends RuntimeException {
+    public ShipmentAlreadyShippedException(UUID orderId) { super("Shipment for order " + orderId + " is already shipped"); }
 }

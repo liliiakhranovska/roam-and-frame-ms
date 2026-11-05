@@ -1,4 +1,7 @@
 package com.roamandframe.shipping.model;
 
-public class ShipmentStatus {
+public enum ShipmentStatus {
+    INITIATED,
+    SHIPPED,
+    CANCELLED
 }
