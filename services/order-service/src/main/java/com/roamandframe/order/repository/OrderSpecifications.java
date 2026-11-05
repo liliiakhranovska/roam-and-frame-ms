@@ -1,5 +1,6 @@
 package com.roamandframe.order.repository;
 
+import com.roamandframe.order.model.OrderFilter;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 

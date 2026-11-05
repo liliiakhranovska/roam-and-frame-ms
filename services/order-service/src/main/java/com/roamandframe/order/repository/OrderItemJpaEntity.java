@@ -1,5 +1,6 @@
 package com.roamandframe.order.repository;
 
+import com.roamandframe.order.model.OrderItem;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

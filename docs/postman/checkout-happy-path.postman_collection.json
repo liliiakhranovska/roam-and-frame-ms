@@ -1,0 +1,553 @@
+{
+  "info": {
+    "name": "Roam & Frame - checkout happy path",
+    "description": "Run with the Collection Runner, in order. Needs all services, Postgres and Mailpit running, and the customer, catalog and inventory seeds loaded. The service in [brackets] is the one being called.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "mailpitUrl",
+      "value": "http://localhost:8025"
+    },
+    {
+      "key": "email",
+      "value": "lily.swan@gmail.com"
+    },
+    {
+      "key": "password",
+      "value": "password"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "stockBefore",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Health [api-gateway]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/actuator/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "Gateway is up.",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Login as Lily [api-gateway]",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/token",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "token"
+          ]
+        },
+        "description": "Setup: signs in the seed customer. The gateway asks customer-service to check the password and signs the token. The token is stored in the collection variable 'token' and used by every later request.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('token', pm.response.json().accessToken);",
+              "pm.test('Token received', () => pm.expect(pm.collectionVariables.get('token')).to.be.a('string'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Get profile [api-gateway \u2192 customer-service]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/customer/profile",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "customer",
+            "profile"
+          ]
+        },
+        "description": "Setup check: checkout step 1 needs a complete delivery address (addressLine1, city, postalCode, countryCode)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test('Delivery address is complete', () => {",
+              "  ['addressLine1', 'city', 'postalCode', 'countryCode'].forEach(f => pm.expect(p[f], f).to.be.a('string').and.not.empty);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 List products [api-gateway \u2192 catalog-service]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/products",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "products"
+          ]
+        },
+        "description": "Setup check: catalog and inventory seeds are loaded (catalog-service also calls inventory-service for stock)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Products listed', () => pm.expect(pm.response.json().length).to.be.above(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Get product CAM-002, stock before [api-gateway \u2192 catalog-service]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/products/CAM-002",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "products",
+            "CAM-002"
+          ]
+        },
+        "description": "Remembers the stock of CAM-002 (price 749.00) in 'stockBefore' to compare after checkout."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "const q = pm.response.json().quantity;",
+              "pm.collectionVariables.set('stockBefore', q);",
+              "pm.test('At least 1 in stock', () => pm.expect(q).to.be.at.least(1));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Clear cart (setup) [api-gateway \u2192 cart-service]",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/cart",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "cart"
+          ]
+        },
+        "description": "Setup: starts from an empty cart so the run can be repeated."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Add CAM-002 x1 [api-gateway \u2192 cart-service]",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/cart/items/CAM-002",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "cart",
+            "items",
+            "CAM-002"
+          ]
+        },
+        "description": "Adds one Aperture A5 Compact Camera (749.00). cart-service reads price and stock from catalog-service.",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"quantity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Add ACC-003 x2 [api-gateway \u2192 cart-service]",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/cart/items/ACC-003",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "cart",
+            "items",
+            "ACC-003"
+          ]
+        },
+        "description": "Adds two 128GB SD cards (59.00 each).",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"quantity\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 View cart, before checkout [api-gateway \u2192 cart-service]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/cart",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "cart"
+          ]
+        },
+        "description": "Two lines, total 749 + 2 x 59 = 867.00."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "const c = pm.response.json();",
+              "pm.test('Two lines', () => pm.expect(c.items.length).to.eql(2));",
+              "pm.test('Total is 867', () => pm.expect(Number(c.total)).to.eql(867));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 CHECKOUT [api-gateway \u2192 checkout-service]",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/checkout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "checkout"
+          ]
+        },
+        "description": "The saga. checkout-service calls: customer-service (profile) > cart-service (validate) > inventory-service (reserve) > payment-service (authorize) > order-service (create) > shipping-service (create) > cart-service (clear) > notification-service (email). Answers 201 once all steps are done."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+              "const o = pm.response.json();",
+              "pm.collectionVariables.set('orderId', o.id);",
+              "pm.test('Order is PLACED', () => pm.expect(o.status).to.eql('PLACED'));",
+              "pm.test('Total is 867', () => pm.expect(Number(o.total)).to.eql(867));",
+              "pm.test('Two items', () => pm.expect(o.items.length).to.eql(2));",
+              "pm.test('Shipment has a tracking number', () => pm.expect(o.shipment.trackingNumber).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Get product CAM-002, stock after [api-gateway \u2192 catalog-service]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/products/CAM-002",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "products",
+            "CAM-002"
+          ]
+        },
+        "description": "inventory-service reserved the stock: one less than in request 05."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Stock reduced by 1', () => pm.expect(pm.response.json().quantity).to.eql(Number(pm.collectionVariables.get('stockBefore')) - 1));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 View cart, after checkout [api-gateway \u2192 cart-service]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/cart",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "cart"
+          ]
+        },
+        "description": "checkout step 7 cleared the cart."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Cart is empty', () => pm.expect(pm.response.json().items.length).to.eql(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 List my orders [api-gateway \u2192 order-service]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "orders"
+          ]
+        },
+        "description": "order-service lists the order and reads its shipment from shipping-service."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "const mine = pm.response.json().find(o => o.id === pm.collectionVariables.get('orderId'));",
+              "pm.test('New order is listed', () => pm.expect(mine).to.not.be.undefined);",
+              "pm.test('With its shipment', () => pm.expect(mine.shipment.trackingNumber).to.be.a('string'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Confirmation email [mailpit, not via the gateway]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{mailpitUrl}}/api/v1/messages",
+          "host": [
+            "{{mailpitUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "messages"
+          ]
+        },
+        "description": "notification-service sent the confirmation; Mailpit (local mail catcher, no login) holds it. Also visible at http://localhost:8025.",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "const mails = pm.response.json().messages || [];",
+              "pm.test('A mail to the customer exists', () => pm.expect(mails.some(m => (m.To || []).some(t => t.Address === pm.collectionVariables.get('email')))).to.be.true);"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

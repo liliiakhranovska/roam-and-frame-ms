@@ -1,6 +1,7 @@
 package com.roamandframe.order.repository;
 
 import com.roamandframe.order.model.Order;
+import com.roamandframe.order.model.OrderItem;
 import com.roamandframe.order.model.OrderStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
