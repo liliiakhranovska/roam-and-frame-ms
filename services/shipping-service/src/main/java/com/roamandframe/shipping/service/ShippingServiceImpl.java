@@ -78,9 +78,5 @@ class ShippingServiceImpl implements ShippingService {
             }
         });
     }
-
-    private static boolean isBlank(String s) {
-        return s == null || s.isBlank();
-    }
 }
 

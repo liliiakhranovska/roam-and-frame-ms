@@ -65,7 +65,7 @@ Run only the services you need. Do not run this project and the monolith at the 
 | order-service | 8088 | orders |
 | checkout-service | 8089 | checkout |
 
-`api-gateway`, `notification-service`, `inventory-service`, `payment-service`, `catalog-service`, `customer-service` and `cart-service` are ported; `shipping-service` is written but not verified yet. The other services are added as they are ported from the monolith.
+`api-gateway`, `notification-service`, `inventory-service`, `payment-service`, `catalog-service`, `customer-service` and `cart-service` are ported; `shipping-service` and `order-service` are written but not verified yet. The other services are added as they are ported from the monolith.
 
 ## Configuration
 
@@ -85,7 +85,7 @@ openssl rsa -in .local/keys/private.pem -pubout -outform DER | base64 | tr -d '\
 ```
 In the gateway's IntelliJ run configuration set the environment variables
 `JWT_PRIVATE_KEY=<contents of private.b64>;JWT_PUBLIC_KEY=<contents of public.b64>` (each on one line). Services
-that verify tokens (so far `customer-service` and `cart-service`) get only `JWT_PUBLIC_KEY`. Neither the gateway nor such a service
+that verify tokens (so far `customer-service`, `cart-service` and `order-service`) get only `JWT_PUBLIC_KEY`. Neither the gateway nor such a service
 starts without its variables.
 
 ### Gateway
