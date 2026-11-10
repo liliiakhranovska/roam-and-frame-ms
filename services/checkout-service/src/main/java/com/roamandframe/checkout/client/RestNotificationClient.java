@@ -1,5 +1,7 @@
 package com.roamandframe.checkout.client;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -31,10 +33,13 @@ class RestNotificationClient implements NotificationClient {
     }
 
     private final RestClient restClient;
+    private final CircuitBreaker breaker;
 
     RestNotificationClient(@Value("${notification.url}") String baseUrl,
-                           @Value("${notification.timeout}") Duration timeout) {
+                           @Value("${notification.timeout}") Duration timeout,
+                           CircuitBreakerRegistry registry) {
         this.restClient = ClientSupport.restClient(baseUrl, timeout);
+        this.breaker = registry.circuitBreaker("notification");
     }
 
     @Override
@@ -47,6 +52,11 @@ class RestNotificationClient implements NotificationClient {
                         order.items().stream().map(i -> new Item(i.name(), i.quantity(), i.lineTotal())).toList()),
                 new Payment(payment.status(), payment.reference()),
                 shipment.trackingNumber());
+        ClientSupport.run(breaker, "Notification", () -> restClient.post()
+                .uri("/internal/notifications/order-confirmation")
+                .body(body)
+                .retrieve()
+                .toBodilessEntity());
         try {
             restClient.post()
                     .uri("/internal/notifications/order-confirmation")

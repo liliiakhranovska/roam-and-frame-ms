@@ -1,5 +1,7 @@
 package com.roamandframe.checkout.client;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -16,23 +18,22 @@ class RestOrderClient implements OrderClient {
     }
 
     private final RestClient restClient;
+    private final CircuitBreaker breaker;
 
     RestOrderClient(@Value("${order.url}") String baseUrl,
-                    @Value("${order.timeout}") Duration timeout) {
+                    @Value("${order.timeout}") Duration timeout,
+                    CircuitBreakerRegistry registry) {
         this.restClient = ClientSupport.restClient(baseUrl, timeout);
+        this.breaker = registry.circuitBreaker("order");
     }
 
     @Override
     public PlacedOrder create(UUID orderId, UUID customerId, List<CartLine> items) {
-        try {
-            return restClient.post()
-                    .uri("/internal/orders")
-                    .body(new CreateRequest(orderId, customerId, items))
-                    .retrieve()
-                    .body(PlacedOrder.class);
-        } catch (RestClientException e) {
-            throw ClientSupport.failure("Order", e);
-        }
+        return ClientSupport.call(breaker, "Order", () -> restClient.post()
+                .uri("/internal/orders")
+                .body(new CreateRequest(orderId, customerId, items))
+                .retrieve()
+                .body(PlacedOrder.class));
     }
 
     @Override

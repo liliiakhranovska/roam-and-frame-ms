@@ -1,5 +1,7 @@
 package com.roamandframe.checkout.client;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -12,21 +14,20 @@ import java.util.UUID;
 class RestCustomerClient implements CustomerClient {
 
     private final RestClient restClient;
+    private final CircuitBreaker breaker;
 
     RestCustomerClient(@Value("${customer.url}") String baseUrl,
-                       @Value("${customer.timeout}") Duration timeout) {
+                       @Value("${customer.timeout}") Duration timeout,
+                       CircuitBreakerRegistry registry) {
         this.restClient = ClientSupport.restClient(baseUrl, timeout);
+        this.breaker = registry.circuitBreaker("customer");
     }
 
     @Override
     public CustomerProfile getProfile(UUID customerId) {
-        try {
-            return restClient.get()
-                    .uri("/internal/customers/{id}", customerId)
-                    .retrieve()
-                    .body(CustomerProfile.class);
-        } catch (RestClientException e) {
-            throw ClientSupport.failure("Customer", e);
-        }
+        return ClientSupport.call(breaker, "Customer", () -> restClient.get()
+                .uri("/internal/customers/{id}", customerId)
+                .retrieve()
+                .body(CustomerProfile.class));
     }
 }

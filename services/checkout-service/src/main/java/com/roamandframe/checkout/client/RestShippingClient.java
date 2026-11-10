@@ -1,5 +1,7 @@
 package com.roamandframe.checkout.client;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -19,25 +21,24 @@ class RestShippingClient implements ShippingClient {
     }
 
     private final RestClient restClient;
+    private final CircuitBreaker breaker;
 
     RestShippingClient(@Value("${shipping.url}") String baseUrl,
-                       @Value("${shipping.timeout}") Duration timeout) {
+                       @Value("${shipping.timeout}") Duration timeout,
+                       CircuitBreakerRegistry registry) {
         this.restClient = ClientSupport.restClient(baseUrl, timeout);
+        this.breaker = registry.circuitBreaker("shipping");
     }
 
     @Override
     public ShipmentResult create(UUID orderId, CustomerProfile customer) {
         Address address = new Address(customer.addressLine1(), customer.addressLine2(), customer.city(),
                 customer.region(), customer.postalCode(), customer.countryCode());
-        try {
-            return restClient.post()
-                    .uri("/internal/shipments")
-                    .body(new CreateRequest(orderId, customer.id(), address))
-                    .retrieve()
-                    .body(ShipmentResult.class);
-        } catch (RestClientException e) {
-            throw ClientSupport.failure("Shipping", e);
-        }
+        return ClientSupport.call(breaker, "Shipping", () -> restClient.post()
+                .uri("/internal/shipments")
+                .body(new CreateRequest(orderId, customer.id(), address))
+                .retrieve()
+                .body(ShipmentResult.class));
     }
 
     @Override

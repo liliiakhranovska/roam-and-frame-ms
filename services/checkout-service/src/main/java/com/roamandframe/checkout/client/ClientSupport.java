@@ -7,7 +7,10 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 
+import java.util.function.Supplier;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
@@ -38,6 +41,27 @@ final class ClientSupport {
             }
         }
         return new StepUnavailableException(service, e);
+    }
+
+    static <T> T call(CircuitBreaker breaker, String service, Supplier<T> request) {
+        try {
+            return breaker.executeSupplier(() -> {
+                try {
+                    return request.get();
+                } catch (RestClientException e) {
+                    throw failure(service, e);
+                }
+            });
+        } catch (CallNotPermittedException e) {
+            throw new StepUnavailableException(service, e);
+        }
+    }
+
+    static void run(CircuitBreaker breaker, String service, Runnable request) {
+        call(breaker, service, () -> {
+            request.run();
+            return null;
+        });
     }
 
     private static String detail(RestClientResponseException e) {
