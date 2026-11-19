@@ -19,14 +19,14 @@ final class ClientSupport {
     private ClientSupport() {
     }
 
-    static RestClient restClient(String baseUrl, Duration timeout) {
+    static RestClient restClient(RestClient.Builder restClientBuilder, String baseUrl, Duration timeout) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(timeout)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(timeout);
-        return RestClient.builder()
+        return restClientBuilder
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .build();
@@ -50,6 +50,8 @@ final class ClientSupport {
                     return request.get();
                 } catch (RestClientException e) {
                     throw failure(service, e);
+                } catch (IllegalStateException e) {
+                    throw new StepUnavailableException(service, e);
                 }
             });
         } catch (CallNotPermittedException e) {

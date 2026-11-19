@@ -4,6 +4,7 @@ import com.roamandframe.order.exception.ShipmentRejectedException;
 import com.roamandframe.order.exception.ShippingUnavailableException;
 import com.roamandframe.order.model.ShipmentInfo;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -25,7 +26,8 @@ class RestShippingClient implements ShippingClient {
 
     private final RestClient restClient;
 
-    RestShippingClient(@Value("${shipping.url}") String baseUrl,
+    RestShippingClient(@LoadBalanced RestClient.Builder restClientBuilder,
+                       @Value("${shipping.url}") String baseUrl,
                        @Value("${shipping.timeout}") Duration timeout) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -33,7 +35,7 @@ class RestShippingClient implements ShippingClient {
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(timeout);
-        this.restClient = RestClient.builder()
+        this.restClient = restClientBuilder
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .build();
@@ -50,7 +52,7 @@ class RestShippingClient implements ShippingClient {
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<ShipmentInfo>>() { });
             return shipments.stream().collect(Collectors.toMap(ShipmentInfo::orderId, Function.identity()));
-        } catch (RestClientException e) {
+        } catch (RestClientException | IllegalStateException e) {
             throw new ShippingUnavailableException(e);
         }
     }
@@ -67,7 +69,7 @@ class RestShippingClient implements ShippingClient {
                 throw new ShipmentRejectedException(orderId);
             }
             throw new ShippingUnavailableException(e);
-        } catch (RestClientException e) {
+        } catch (RestClientException | IllegalStateException e) {
             throw new ShippingUnavailableException(e);
         }
     }

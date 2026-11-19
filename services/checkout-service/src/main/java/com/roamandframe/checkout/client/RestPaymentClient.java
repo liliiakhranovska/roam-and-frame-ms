@@ -3,6 +3,7 @@ package com.roamandframe.checkout.client;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -20,10 +21,11 @@ class RestPaymentClient implements PaymentClient {
     private final RestClient restClient;
     private final CircuitBreaker breaker;
 
-    RestPaymentClient(@Value("${payment.url}") String baseUrl,
+    RestPaymentClient(@LoadBalanced RestClient.Builder restClientBuilder,
+                      @Value("${payment.url}") String baseUrl,
                       @Value("${payment.timeout}") Duration timeout,
                       CircuitBreakerRegistry registry) {
-        this.restClient = ClientSupport.restClient(baseUrl, timeout);
+        this.restClient = ClientSupport.restClient(restClientBuilder, baseUrl, timeout);
         this.breaker =  registry.circuitBreaker("payment");
     }
 

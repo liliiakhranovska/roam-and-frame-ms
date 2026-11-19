@@ -1,6 +1,7 @@
 package com.roamandframe.catalog.client;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -20,15 +21,16 @@ class RestInventoryClient implements InventoryClient {
 
     private final RestClient restClient;
 
-    RestInventoryClient(@Value("${inventory.url}") String baseUrl,
-                        @Value("${inventory.timeout}") Duration timeout) {
+    RestInventoryClient( @LoadBalanced RestClient.Builder restClientBuilder,
+                         @Value("${inventory.url}") String baseUrl,
+                         @Value("${inventory.timeout}") Duration timeout) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(timeout)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(timeout);
-        this.restClient = RestClient.builder()
+        this.restClient = restClientBuilder
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .build();
@@ -44,7 +46,7 @@ class RestInventoryClient implements InventoryClient {
                     .uri(uri -> uri.path("/internal/inventory/quantities").queryParam("skus", skus).build())
                     .retrieve()
                     .body(QUANTITIES);
-        } catch (RestClientException e) {
+        } catch (RestClientException | IllegalStateException e) {
             throw new InventoryUnavailableException(e);
         }
     }

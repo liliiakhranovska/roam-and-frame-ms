@@ -3,6 +3,7 @@ package com.roamandframe.checkout.client;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -20,10 +21,11 @@ class RestOrderClient implements OrderClient {
     private final RestClient restClient;
     private final CircuitBreaker breaker;
 
-    RestOrderClient(@Value("${order.url}") String baseUrl,
+    RestOrderClient(@LoadBalanced RestClient.Builder restClientBuilder,
+                    @Value("${order.url}") String baseUrl,
                     @Value("${order.timeout}") Duration timeout,
                     CircuitBreakerRegistry registry) {
-        this.restClient = ClientSupport.restClient(baseUrl, timeout);
+        this.restClient = ClientSupport.restClient(restClientBuilder, baseUrl, timeout);
         this.breaker = registry.circuitBreaker("order");
     }
 

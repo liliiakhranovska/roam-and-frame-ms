@@ -2,6 +2,7 @@ package com.roamandframe.cart.client;
 
 import com.roamandframe.cart.exception.CatalogUnavailableException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -21,15 +22,16 @@ class RestCatalogClient implements CatalogClient {
 
     private final RestClient restClient;
 
-    RestCatalogClient(@Value("${catalog.url}") String baseUrl,
-                        @Value("${catalog.timeout}") Duration timeout) {
+    RestCatalogClient(@LoadBalanced RestClient.Builder builder,
+                      @Value("${catalog.url}") String baseUrl,
+                      @Value("${catalog.timeout}") Duration timeout) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(timeout)
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(timeout);
-        this.restClient = RestClient.builder()
+        this.restClient = builder
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .build();
@@ -46,7 +48,7 @@ class RestCatalogClient implements CatalogClient {
                     .retrieve()
                     .body(new ParameterizedTypeReference<List<CatalogProduct>>() { });
             return products.stream().collect(Collectors.toMap(CatalogProduct::sku, Function.identity()));
-        } catch (RestClientException e) {
+        } catch (RestClientException | IllegalStateException e) {
             throw new CatalogUnavailableException(e);
         }
     }
