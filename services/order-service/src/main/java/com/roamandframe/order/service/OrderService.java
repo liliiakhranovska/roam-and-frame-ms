@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface OrderService {
     Order create(UUID orderId, UUID customerId, List<OrderItem> items);
     void cancel(UUID orderId);
-    List<OrderDetails> getOrders(UUID customerId);
     OrderDetails markShipped(UUID orderId);
     List<OrderDetails> searchOrders(OrderFilter filter);
+    OrderDetails getOrder(UUID customerId, UUID orderId);
 }

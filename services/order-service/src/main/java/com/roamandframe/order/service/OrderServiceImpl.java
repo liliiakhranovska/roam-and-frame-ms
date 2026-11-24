@@ -51,11 +51,6 @@ class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public List<OrderDetails> getOrders(UUID customerId) {
-        return withShipments(orderRepository.findByCustomerId(customerId));
-    }
-
-    @Override
     public OrderDetails markShipped(UUID orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
@@ -64,8 +59,8 @@ class OrderServiceImpl implements OrderService {
         }
         ShipmentInfo shipment = shippingClient.ship(orderId);   // first: safe to repeat
         orderRepository.markShipped(orderId);
-        Order shipped = new Order(order.id(), order.customerId(), OrderStatus.SHIPPED, order.total(),
-                order.createdAt(), order.items());
+        Order shipped = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
         return new OrderDetails(shipped, shipment);
     }
 
@@ -80,5 +75,15 @@ class OrderServiceImpl implements OrderService {
         }
         Map<UUID, ShipmentInfo> shipments = shippingClient.findByOrderIds(orders.stream().map(Order::id).toList());
         return orders.stream().map(o -> new OrderDetails(o, shipments.get(o.id()))).toList();
+    }
+
+    @Override
+    public OrderDetails getOrder(UUID customerId, UUID orderId) {
+        // 404 (not 403) for someone else's or a cancelled order: never reveal that it exists
+        Order order = orderRepository.findById(orderId)
+                .filter(o -> o.customerId().equals(customerId))
+                .filter(o -> o.status() != OrderStatus.CANCELLED)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        return withShipments(List.of(order)).get(0);
     }
 }

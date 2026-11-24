@@ -39,6 +39,9 @@ class OrderJpaEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "shipped_at")
+    private Instant shippedAt;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("lineNo")
     private List<OrderItemJpaEntity> items = new ArrayList<>();
@@ -58,7 +61,8 @@ class OrderJpaEntity {
     }
 
     Order toModel() {
-        return new Order(id, customerId, status, total, createdAt, items.stream().map(OrderItemJpaEntity::toModel).toList());
+        return new Order(id, customerId, status, total, createdAt, shippedAt,
+                items.stream().map(OrderItemJpaEntity::toModel).toList());
     }
 
     boolean ship() {
@@ -66,6 +70,7 @@ class OrderJpaEntity {
             return false;
         }
         status = OrderStatus.SHIPPED;
+        shippedAt = Instant.now();
         return true;
     }
 

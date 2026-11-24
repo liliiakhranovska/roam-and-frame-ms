@@ -12,8 +12,6 @@ import java.util.UUID;
 public interface OrderRepository {
     Order create(UUID id, UUID customerId, List<OrderItem> items, BigDecimal total);
     Optional<Order> findById(UUID id);
-    /** CANCELLED orders belong to failed checkouts and are not listed. */
-    List<Order> findByCustomerId(UUID customerId);
     void markShipped(UUID id);
     void markCancelled(UUID id);
     List<Order> search(OrderFilter filter);

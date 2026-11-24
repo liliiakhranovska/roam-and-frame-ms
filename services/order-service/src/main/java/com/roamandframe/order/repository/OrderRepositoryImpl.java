@@ -1,9 +1,6 @@
 package com.roamandframe.order.repository;
 
-import com.roamandframe.order.model.Order;
-import com.roamandframe.order.model.OrderFilter;
-import com.roamandframe.order.model.OrderItem;
-import com.roamandframe.order.model.OrderStatus;
+import com.roamandframe.order.model.*;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
@@ -36,10 +33,9 @@ class OrderRepositoryImpl implements OrderRepository {
     @Transactional(readOnly = true)
     @Override
     public List<Order> search(OrderFilter filter) {
-        PageRequest newestFirst = PageRequest.of(0, MAX_RESULTS,
-                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id")));
+        PageRequest page = PageRequest.of(0, MAX_RESULTS, toSort(filter));
 
-        List<UUID> ids = jpaRepository.findAll(OrderSpecifications.matching(filter), newestFirst)
+        List<UUID> ids = jpaRepository.findAll(OrderSpecifications.matching(filter), page)
                 .getContent().stream()
                 .map(OrderJpaEntity::getId)
                 .toList();
@@ -58,14 +54,6 @@ class OrderRepositoryImpl implements OrderRepository {
         return jpaRepository.findById(id).map(OrderJpaEntity::toModel);
     }
 
-    @Transactional(readOnly = true)
-    @Override
-    public List<Order> findByCustomerId(UUID customerId) {
-        return jpaRepository.findByCustomerIdAndStatusNotOrderByCreatedAtDesc(customerId, OrderStatus.CANCELLED).stream()
-                .map(OrderJpaEntity::toModel)
-                .toList();
-    }
-
     @Transactional
     @Override
     public void markShipped(UUID id) {
@@ -76,6 +64,16 @@ class OrderRepositoryImpl implements OrderRepository {
     @Override
     public void markCancelled(UUID id) {
         jpaRepository.findById(id).ifPresent(OrderJpaEntity::cancel);
+    }
+
+    private static Sort toSort(OrderFilter filter) {
+        OrderSort sort = filter.sort() == null ? OrderSort.CREATED_AT : filter.sort();
+        String property = switch (sort) {
+            case CREATED_AT -> "createdAt";
+            case TOTAL -> "total";
+        };
+        Sort.Direction direction = filter.descending() ? Sort.Direction.DESC : Sort.Direction.ASC;
+        return Sort.by(direction, property).and(Sort.by("id"));   // id = stable tiebreaker
     }
 }
 

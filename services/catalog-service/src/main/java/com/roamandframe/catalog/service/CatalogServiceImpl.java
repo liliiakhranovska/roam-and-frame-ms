@@ -2,9 +2,7 @@ package com.roamandframe.catalog.service;
 
 import com.roamandframe.catalog.client.InventoryClient;
 import com.roamandframe.catalog.exception.ProductNotFoundException;
-import com.roamandframe.catalog.model.Product;
-import com.roamandframe.catalog.model.ProductSummary;
-import com.roamandframe.catalog.model.WithStock;
+import com.roamandframe.catalog.model.*;
 import com.roamandframe.catalog.repository.CatalogRepository;
 import org.springframework.stereotype.Service;
 import java.util.Collection;
@@ -24,13 +22,13 @@ class CatalogServiceImpl implements CatalogService {
     }
 
     @Override
-    public List<WithStock<ProductSummary>> searchProducts(String categoryCode, String brand, Boolean inStock) {
-        List<ProductSummary> products = catalogRepository.search(categoryCode, brand);
+    public List<WithStock<ProductSummary>> searchProducts(ProductFilter filter) {
+        List<ProductSummary> products = catalogRepository.search(filter);
         Map<String, Integer> quantities = inventoryClient.getQuantities(
                 products.stream().map(ProductSummary::sku).toList());
         return products.stream()
                 .map(p -> new WithStock<>(p, quantities.getOrDefault(p.sku(), 0)))
-                .filter(p -> inStock == null || (p.quantity() > 0) == inStock)
+                .filter(p -> filter.inStock() == null || (p.quantity() > 0) == filter.inStock())
                 .toList();
     }
 
@@ -48,6 +46,21 @@ class CatalogServiceImpl implements CatalogService {
         Product product = catalogRepository.findBySku(sku)
                 .orElseThrow(() -> new ProductNotFoundException(sku));
         return new WithStock<>(product, inventoryClient.getQuantities(List.of(sku)).get(sku));
+    }
+
+    @Override
+    public List<Category> getCategories() {
+        return catalogRepository.findCategories();
+    }
+
+    @Override
+    public List<String> getBrands() {
+        return catalogRepository.findBrands();
+    }
+
+    @Override
+    public PriceRange getPriceRange() {
+        return catalogRepository.findPriceRange();
     }
 }
 

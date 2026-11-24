@@ -5,7 +5,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -23,5 +25,15 @@ interface ProductJpaRepository
 
     @EntityGraph(attributePaths = "category")
     List<ProductJpaEntity> findBySkuIn(Collection<String> skus);
+
+    @Query("select distinct p.brand from ProductJpaEntity p "
+            + "where p.active = true and p.brand is not null order by p.brand")
+    List<String> findActiveBrands();
+
+    @Query("select min(p.price) from ProductJpaEntity p where p.active = true")
+    BigDecimal findMinActivePrice();
+
+    @Query("select max(p.price) from ProductJpaEntity p where p.active = true")
+    BigDecimal findMaxActivePrice();
 }
 
