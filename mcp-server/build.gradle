@@ -1,0 +1,17 @@
+plugins {
+    id 'roamandframe.spring-service'
+}
+
+dependencyManagement {
+    imports {
+        // Spring AI 2.0.x supports Boot 4.0/4.1. Confirm the latest 2.0.x patch on Maven Central.
+        mavenBom 'org.springframework.ai:spring-ai-bom:2.0.2'
+    }
+}
+
+dependencies {
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.3.0'
+}

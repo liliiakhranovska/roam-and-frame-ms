@@ -23,6 +23,7 @@ Docs: `docs/decisions.md` (settled and open decisions), `docs/architecture/` (ta
 build-logic/   shared Gradle plugin `roamandframe.spring-service` (used by every service)
 services/      <name>-service, one folder per service
 api-gateway/   routing, authentication, token signing
+mcp-server/    read-only MCP adapter for AI agents (tools over the public /api/v1 endpoints)
 deploy/        local infrastructure (compose.yaml, Postgres init script)
 docs/          decisions, architecture
 ```
@@ -64,8 +65,34 @@ Run only the services you need. Do not run this project and the monolith at the 
 | shipping-service | 8087 | shipping |
 | order-service | 8088 | orders |
 | checkout-service | 8089 | checkout |
+| mcp-server | 8090 | none |
 
 `api-gateway`, `notification-service`, `inventory-service`, `payment-service`, `catalog-service`, `customer-service` and `cart-service` are ported; `shipping-service` and `order-service` are written but not verified yet. The other services are added as they are ported from the monolith.
+
+`mcp-server` is checked by hand in Postman only; the new catalog and order filters have no automated tests yet.
+
+## MCP server
+
+`mcp-server` lets an AI agent read the platform. It is an adapter, not a business layer: each tool calls
+an existing public `/api/v1` endpoint with the caller's own token. It is read-only (no cart changes, no checkout).
+
+- Endpoint: `POST http://localhost:8090/mcp` (MCP over Streamable HTTP, JSON-RPC 2.0)
+- Needs `JWT_PUBLIC_KEY`, like the other services, and a bearer token from `POST /api/v1/auth/token`
+- Every request must carry `Authorization: Bearer <token>`; after `initialize`, also the `Mcp-Session-Id` response header
+
+| Tool | Backend | Purpose |
+|---|---|---|
+| `search_products` | catalog | filtered product search |
+| `get_product` | catalog | one product with all attributes and stock |
+| `compare_products` | catalog | 2 to 5 products, full details |
+| `get_catalog_filters` | catalog | valid categories, brands, price range |
+| `list_orders` | order | the customer's orders, filtered by date, status, total, SKU |
+| `get_order` | order | one order with items and shipment |
+| `get_cart` | cart | the customer's cart |
+| `get_profile` | customer | the customer's profile and address |
+
+Try it in Postman, in this order: `initialize`, `notifications/initialized`, `tools/list`, `tools/call`.
+Store `Mcp-Session-Id` from the `initialize` response only.
 
 ## Configuration
 
